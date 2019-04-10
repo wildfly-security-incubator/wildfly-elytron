@@ -143,6 +143,17 @@
             <!-- scope is compile ELY-1153 -->
         </dependency>
 
+        <dependency>
+            <groupId>org.jboss.ws</groupId>
+            <artifactId>jbossws-spi</artifactId>
+            <version>3.2.4-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.kohsuke.metainf-services</groupId>
+            <artifactId>metainf-services</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!--Test scope-->
         <dependency>
             <groupId>org.wildfly.security</groupId>
