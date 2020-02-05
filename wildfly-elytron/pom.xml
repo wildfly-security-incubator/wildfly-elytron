@@ -331,14 +331,6 @@
         </dependency>
         <dependency>
             <groupId>org.wildfly.security</groupId>
-            <artifactId>wildfly-elytron-jacc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.wildfly.security</groupId>
-            <artifactId>wildfly-elytron-jaspi</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-json-util</artifactId>
         </dependency>
         <dependency>
@@ -669,22 +661,12 @@
                                 </dependency>
                                 <dependency>
                                     <groupId>org.wildfly.security</groupId>
-                                    <artifactId>wildfly-elytron-jacc</artifactId>
-                                    <version>${project.version}</version>
-                                </dependency>
-                                <dependency>
-                                    <groupId>org.wildfly.security</groupId>
                                     <artifactId>wildfly-elytron-json-util</artifactId>
                                     <version>${project.version}</version>
                                 </dependency>
                                 <dependency>
                                     <groupId>org.wildfly.security</groupId>
                                     <artifactId>wildfly-elytron-keystore</artifactId>
-                                    <version>${project.version}</version>
-                                </dependency>
-                                <dependency>
-                                    <groupId>org.wildfly.security</groupId>
-                                    <artifactId>wildfly-elytron-jaspi</artifactId>
                                     <version>${project.version}</version>
                                 </dependency>
                                 <dependency>
@@ -891,7 +873,6 @@
                                     <include>org.wildfly.security.auth</include>
                                     <include>org.wildfly.security.auth.callback</include>
                                     <include>org.wildfly.security.auth.client</include>
-                                    <include>org.wildfly.security.auth.jaspi</include>
                                     <include>org.wildfly.security.auth.permission</include>
                                     <include>org.wildfly.security.auth.principal</include>
                                     <include>org.wildfly.security.auth.server</include>

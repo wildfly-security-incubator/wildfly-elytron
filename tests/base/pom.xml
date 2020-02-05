@@ -375,11 +375,6 @@
 
         <dependency>
             <groupId>org.wildfly.security</groupId>
-            <artifactId>wildfly-elytron-jacc</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-mechanism-gssapi</artifactId>
         </dependency>
 
@@ -522,12 +517,6 @@
             <groupId>org.wildfly.common</groupId>
             <artifactId>wildfly-common</artifactId>
             <!-- scope is compile ELY-1153 -->
-        </dependency>
-
-        <dependency>
-            <groupId>org.jboss.spec.javax.security.jacc</groupId>
-            <artifactId>jboss-jacc-api_1.5_spec</artifactId>
-            <scope>provided</scope>
         </dependency>
 
         <dependency>
