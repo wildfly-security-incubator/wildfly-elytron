@@ -38,6 +38,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.wildfly.security.http.digest.NonceManagerTestUtils;
 import org.wildfly.security.http.digest.WildFlyElytronHttpDigestProvider;
 import org.wildfly.security.http.impl.AbstractBaseHttpTest;
 import org.wildfly.security.http.util.SecurityProviderServerMechanismFactory;
@@ -80,7 +81,7 @@ public class HttpAuthenticatorTest extends AbstractBaseHttpTest {
     }
 
     private void testOneOfThree() throws Exception {
-        mockDigestNonce("7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v");
+        NonceManagerTestUtils.mockDigestNonce("7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v");
 
         Map<String, Object> digestProps = new HashMap<>();
         digestProps.put(CONFIG_REALM, "http-auth@example.org");
@@ -165,7 +166,7 @@ public class HttpAuthenticatorTest extends AbstractBaseHttpTest {
     }
 
     public List<HttpServerAuthenticationMechanism> prepareBasicSilentMechanisms() throws Exception {
-        mockDigestNonce("7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v");
+        NonceManagerTestUtils.mockDigestNonce("7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v");
 
         final List<HttpServerAuthenticationMechanism> mechanisms = new LinkedList<>();
         Map<String, Object> silentProp = new HashMap<>();
@@ -226,7 +227,7 @@ public class HttpAuthenticatorTest extends AbstractBaseHttpTest {
     }
 
     public void prepareSecurityProviderServerMechanismWithDigestMD5() throws Exception {
-        mockDigestNonce("7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v");
+        NonceManagerTestUtils.mockDigestNonce("7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v");
 
         final List<HttpServerAuthenticationMechanism> mechanisms = new LinkedList<>();
         Map<String, Object> digestProps = new HashMap<>();

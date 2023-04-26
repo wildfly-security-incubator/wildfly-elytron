@@ -18,6 +18,9 @@
 
 package org.wildfly.security.http.digest;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.security.DigestException;
 import java.security.GeneralSecurityException;
@@ -35,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.wildfly.common.iteration.ByteIterator;
 import org.wildfly.common.iteration.CodePointIterator;
+import org.wildfly.security.http.HttpServerRequest;
 import org.wildfly.security.mechanism._private.ElytronMessages;
 import org.wildfly.security.mechanism.AuthenticationMechanismException;
 
@@ -43,11 +47,15 @@ import org.wildfly.security.mechanism.AuthenticationMechanismException;
  *
  * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>
  */
-public class NonceManager {
+class NonceManager implements  Serializable {
+
+    public static final int DEFAULT_VALIDITY_PERIOD = 300000;
+    public static final int DEFAULT_NONCE_SESSION_TIME = 900000;
+    public static final int DEFAULT_KEY_SIZE = 20;
 
     private static final int PREFIX_LENGTH = Integer.BYTES + Long.BYTES;
 
-    private final ScheduledExecutorService executor;
+    private transient ScheduledExecutorService executor;
     private final AtomicInteger nonceCounter = new AtomicInteger();
     private final Map<String, NonceState> usedNonces = new HashMap<>();
 
@@ -58,7 +66,8 @@ public class NonceManager {
     private final boolean singleUse;
     private final String algorithm;
     private ElytronMessages log;
-
+    private transient HttpServerRequest request;
+    private final boolean persistToSession;
 
     /**
      * @param validityPeriod the time in ms that nonces are valid for in ms.
@@ -82,6 +91,7 @@ public class NonceManager {
         INSTANCE.setRemoveOnCancelPolicy(true);
         INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         executor = INSTANCE;
+        persistToSession = false;
     }
 
     /**
@@ -105,6 +115,7 @@ public class NonceManager {
         INSTANCE.setRemoveOnCancelPolicy(true);
         INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         executor = INSTANCE;
+        persistToSession = false;
     }
 
     /**
@@ -134,6 +145,38 @@ public class NonceManager {
         else {
             executor = customExecutor;
         }
+        persistToSession = false;
+    }
+
+    /**
+     * @param validityPeriod the time in ms that nonces are valid for in ms.
+     * @param nonceSessionTime the time in ms a nonce is usable for after it's last use where nonce counts are in use.
+     * @param singleUse are nonces single use?
+     * @param keySize the number of bytes to use in the private key of this node.
+     * @param algorithm the message digest algorithm to use when creating the digest portion of the nonce.
+     * @param log mechanism specific logger.
+     * @param customExecutor a custom ScheduledExecutorService to be used
+     * @param persistToSession should the nonce manager instance be persisted in HTTP Session so it is shared between nodes in a cluster
+     */
+    NonceManager(long validityPeriod, long nonceSessionTime, boolean singleUse, int keySize, String algorithm, ElytronMessages log, ScheduledExecutorService customExecutor, boolean persistToSession) {
+        this.validityPeriodNano = validityPeriod * 1000000;
+        this.nonceSessionTime = nonceSessionTime;
+        this.singleUse = singleUse;
+        this.algorithm = algorithm;
+        this.log = log;
+
+        this.privateKey = new byte[keySize];
+        new SecureRandom().nextBytes(privateKey);
+        if (customExecutor == null) {
+            ScheduledThreadPoolExecutor INSTANCE = new ScheduledThreadPoolExecutor(1);
+            INSTANCE.setRemoveOnCancelPolicy(true);
+            INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+            executor = INSTANCE;
+        }
+        else {
+            executor = customExecutor;
+        }
+        this.persistToSession = persistToSession;
     }
 
     /**
@@ -311,12 +354,36 @@ public class NonceManager {
         }
     }
 
+    public boolean persistToSession() {
+        return persistToSession;
+    }
+
+    public void setRequest(HttpServerRequest request) {
+        this.request = request;
+    }
+
+    public HttpServerRequest getRequest() {
+        return this.request;
+    }
+
     public void shutdown() {
         if (executor != null) { executor.shutdown(); }
     }
 
-    private static class NonceState {
-        private ScheduledFuture<?> futureCleanup;
+    void setDefaultExecutor() {
+        ScheduledThreadPoolExecutor INSTANCE = new ScheduledThreadPoolExecutor(1);
+        INSTANCE.setRemoveOnCancelPolicy(true);
+        INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        this.executor = INSTANCE;
+    }
+
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        setDefaultExecutor();
+    }
+
+    static class NonceState implements Serializable {
+        private transient ScheduledFuture<?> futureCleanup;
         private int highestNonceCount = -1;
     }
 }

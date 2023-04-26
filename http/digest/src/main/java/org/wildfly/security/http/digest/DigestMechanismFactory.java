@@ -21,12 +21,14 @@ package org.wildfly.security.http.digest;
 import static org.wildfly.common.Assert.checkNotNullParam;
 import static org.wildfly.security.http.HttpConstants.CONFIG_CONTEXT_PATH;
 import static org.wildfly.security.http.HttpConstants.CONFIG_REALM;
+import static org.wildfly.security.http.HttpConstants.CONFIG_SESSION_BASED_DIGEST_NONCE_MANAGER;
 import static org.wildfly.security.http.HttpConstants.DIGEST_NAME;
 import static org.wildfly.security.http.HttpConstants.DIGEST_SHA256_NAME;
 import static org.wildfly.security.http.HttpConstants.DIGEST_SHA512_256_NAME;
 import static org.wildfly.security.http.HttpConstants.MD5;
 import static org.wildfly.security.http.HttpConstants.SHA256;
 import static org.wildfly.security.http.HttpConstants.SHA512_256;
+import static org.wildfly.security.http.digest.NonceManager.*;
 import static org.wildfly.security.provider.util.ProviderUtil.INSTALLED_PROVIDERS;
 
 import java.security.Provider;
@@ -58,7 +60,7 @@ public class DigestMechanismFactory implements HttpServerAuthenticationMechanism
     }
 
     public DigestMechanismFactory(final Provider provider) {
-        this(new Provider[] { provider });
+        this(new Provider[]{provider});
     }
 
     public DigestMechanismFactory(final Provider... providers) {
@@ -73,7 +75,7 @@ public class DigestMechanismFactory implements HttpServerAuthenticationMechanism
      * SHA256 Digest Algorithm
      */
 
-    private static NonceManager nonceManager = new NonceManager(300000, 900000, true, 20, SHA256, ElytronMessages.httpDigest);
+    private static NonceManager nonceManager = new NonceManager(DEFAULT_VALIDITY_PERIOD, DEFAULT_NONCE_SESSION_TIME, true, DEFAULT_KEY_SIZE, SHA256, ElytronMessages.httpDigest);
 
     /**
      * @see org.wildfly.security.http.HttpServerAuthenticationMechanismFactory#getMechanismNames(java.util.Map)
@@ -100,6 +102,10 @@ public class DigestMechanismFactory implements HttpServerAuthenticationMechanism
 
         if (properties.containsKey("nonceManager")) {
             nonceManager = (NonceManager) properties.get("nonceManager");
+        } else if (properties.get(CONFIG_SESSION_BASED_DIGEST_NONCE_MANAGER) != null) {
+            if (Boolean.parseBoolean((String) properties.get(CONFIG_SESSION_BASED_DIGEST_NONCE_MANAGER))) {
+                nonceManager = new NonceManager(DEFAULT_VALIDITY_PERIOD, DEFAULT_NONCE_SESSION_TIME, true, DEFAULT_KEY_SIZE, SHA256, ElytronMessages.httpDigest, null, true);
+            }
         }
 
         switch (mechanismName) {
