@@ -82,7 +82,6 @@ import org.wildfly.security.http.basic.BasicMechanismFactory;
 import org.wildfly.security.http.bearer.BearerMechanismFactory;
 import org.wildfly.security.http.cert.ClientCertMechanismFactory;
 import org.wildfly.security.http.digest.DigestMechanismFactory;
-import org.wildfly.security.http.digest.NonceManager;
 import org.wildfly.security.http.external.ExternalMechanismFactory;
 import org.wildfly.security.password.Password;
 import org.wildfly.security.password.PasswordFactory;
@@ -105,20 +104,6 @@ public class AbstractBaseHttpTest {
     protected final HttpServerAuthenticationMechanismFactory bearerFactory = new BearerMechanismFactory(ELYTRON_PASSWORD_PROVIDERS.get());
     protected HttpServerAuthenticationMechanismFactory certFactory = new ClientCertMechanismFactory(ELYTRON_PASSWORD_PROVIDERS.get()[0]);
     protected HttpServerAuthenticationMechanismFactory statefulBasicFactory = new org.wildfly.security.http.sfbasic.BasicMechanismFactory(ELYTRON_PASSWORD_PROVIDERS.get());
-
-    protected void mockDigestNonce(final String nonce) {
-        new MockUp<NonceManager>() {
-            @Mock
-            String generateNonce(byte[] salt) {
-                return nonce;
-            }
-
-            @Mock
-            boolean useNonce(final String nonce, byte[] salt, int nonceCount) {
-                return true;
-            }
-        };
-    }
 
     protected SecurityIdentity mockSecurityIdentity(Principal p) {
         return new MockUp<SecurityIdentity>() {
