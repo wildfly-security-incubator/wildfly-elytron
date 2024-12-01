@@ -44,6 +44,7 @@ import java.security.Provider;
 import java.security.PublicKey;
 import java.security.Security;
 import java.security.UnrecoverableEntryException;
+import java.security.KeyStore.SecretKeyEntry;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
@@ -1172,7 +1173,14 @@ public final class KeyStoreCredentialStore extends CredentialStoreSpi {
     private final class ExternalStorage {
 
         // version of external storage file, can be used later to enhance functionality and keep backward compatibility
-        private int VERSION = 1;
+        private int VERSION_ONE = 1;
+        /*
+         * If the file being read is version 2 the algorithm of each SecretKey is written after the encoded form.
+         *
+         * On writing version 2 will only be selected if at lease one SecretKeyEntry has an algorithm other than
+         * the DATA_OID value.
+         */
+        private int VERSION_TWO = 2;
 
         private int SECRET_KEY_ENTRY_TYPE = 100;
 
@@ -1237,11 +1245,12 @@ public final class KeyStoreCredentialStore extends CredentialStoreSpi {
             dataKeyStore.load(null, null);
             ObjectInputStream ois = new ObjectInputStream(inputStream);
             int fileVersion = ois.readInt();
-            if (fileVersion == VERSION) {
+            if (fileVersion == VERSION_ONE || fileVersion == VERSION_TWO) {
+                boolean readAlgorithm = fileVersion == VERSION_TWO;
                 while (ois.available() > 0) {
                     int entryType = ois.readInt();
                     if (entryType == SECRET_KEY_ENTRY_TYPE) {
-                        loadSecretKey(ois);
+                        loadSecretKey(ois, readAlgorithm);
                     } else {
                         throw log.unrecognizedEntryType(Integer.toString(entryType));
                     }
@@ -1252,7 +1261,7 @@ public final class KeyStoreCredentialStore extends CredentialStoreSpi {
             ois.close();
         }
 
-        private void loadSecretKey(ObjectInputStream ois) throws IOException, GeneralSecurityException {
+        private void loadSecretKey(ObjectInputStream ois, boolean readAlgorithm) throws IOException, GeneralSecurityException {
             byte[] encryptedData = readBytes(ois);
             byte[] iv = readBytes(ois);
 
@@ -1262,7 +1271,8 @@ public final class KeyStoreCredentialStore extends CredentialStoreSpi {
             ObjectInputStream entryOis = new ObjectInputStream(new ByteArrayInputStream(unPadded));
             String ksAlias = entryOis.readUTF();
             byte[] encodedSecretKey = readBytes(entryOis);
-            KeyStore.Entry entry = new KeyStore.SecretKeyEntry(new SecretKeySpec(encodedSecretKey, DATA_OID));
+            String algorithm = readAlgorithm ? entryOis.readUTF() : DATA_OID;
+            KeyStore.Entry entry = new KeyStore.SecretKeyEntry(new SecretKeySpec(encodedSecretKey, algorithm));
             dataKeyStore.setEntry(ksAlias, entry, convertParameter(protectionParameter));
         }
 
@@ -1289,13 +1299,15 @@ public final class KeyStoreCredentialStore extends CredentialStoreSpi {
          */
         void store(OutputStream outputStream) throws IOException, GeneralSecurityException {
             ObjectOutputStream oos = new ObjectOutputStream(outputStream);
-            oos.writeInt(VERSION);
+            final boolean writeVersionTwo = isWriteUsingVersionTwo();
+
+            oos.writeInt(writeVersionTwo ? VERSION_TWO : VERSION_ONE);
             Enumeration<String> ksAliases = dataKeyStore.aliases();
             while(ksAliases.hasMoreElements()) {
                 String alias = ksAliases.nextElement();
                 KeyStore.Entry entry = dataKeyStore.getEntry(alias, convertParameter(protectionParameter));
                 if (entry instanceof KeyStore.SecretKeyEntry) {
-                    saveSecretKey(alias, oos, (KeyStore.SecretKeyEntry)entry);
+                    saveSecretKey(alias, oos, (KeyStore.SecretKeyEntry)entry, writeVersionTwo);
                 } else {
                     throw log.unrecognizedEntryType(entry != null ? entry.getClass().getCanonicalName() : "null");
                 }
@@ -1304,11 +1316,31 @@ public final class KeyStoreCredentialStore extends CredentialStoreSpi {
             oos.close();
         }
 
-        private void saveSecretKey(String ksAlias, ObjectOutputStream oos, KeyStore.SecretKeyEntry entry) throws IOException, GeneralSecurityException {
+        private boolean isWriteUsingVersionTwo() throws GeneralSecurityException {
+            Enumeration<String> aliases = dataKeyStore.aliases();
+            while(aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+                KeyStore.Entry entry = dataKeyStore.getEntry(alias, convertParameter(protectionParameter));
+                if (entry instanceof KeyStore.SecretKeyEntry) {
+                    SecretKeyEntry secretKeyEntry = (SecretKeyEntry) entry;
+                    if (!DATA_OID.equals(secretKeyEntry.getSecretKey().getAlgorithm())) {
+                        // It just takes one.
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void saveSecretKey(String ksAlias, ObjectOutputStream oos, KeyStore.SecretKeyEntry entry, boolean writeAlgorithm) throws IOException, GeneralSecurityException {
             ByteArrayOutputStream entryData = new ByteArrayOutputStream(1024);
             ObjectOutputStream entryOos = new ObjectOutputStream(entryData);
             entryOos.writeUTF(ksAlias);
-            writeBytes(entry.getSecretKey().getEncoded(), entryOos);
+            SecretKey secretKey = entry.getSecretKey();
+            writeBytes(secretKey.getEncoded(), entryOos);
+            if (writeAlgorithm) {
+                entryOos.writeUTF(secretKey.getAlgorithm());
+            }
             entryOos.flush();
 
             encrypt.init(Cipher.ENCRYPT_MODE, storageSecretKey, (AlgorithmParameterSpec) null); // ELY-1308: third param need to workaround BouncyCastle bug
