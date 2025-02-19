@@ -7,6 +7,7 @@ on:
       - 1.x
       - 2.x
       - 2.2.x
+      - 2.6.x
       - master
 
 jobs:
