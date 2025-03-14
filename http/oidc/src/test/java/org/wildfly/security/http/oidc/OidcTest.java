@@ -206,6 +206,13 @@ public class OidcTest extends OidcBaseTest {
                 getCallbackHandler());
     }
 
+    @Test
+    public void testStandardConfigWithNonceMismatch() throws Exception {
+        performAuthentication(getOidcConfigurationInputStreamWithProviderUrl(),
+                KeycloakConfiguration.ALICE, KeycloakConfiguration.ALICE_PASSWORD, true,
+                HttpStatus.SC_FORBIDDEN, null, CLIENT_PAGE_TEXT, true);
+    }
+
     /*****************************************************************************************************************************************
      * Tests for multi-tenancy.
      *
