@@ -164,14 +164,11 @@ public class CachedIdentityAuthorizeCallback implements ExtendedCallback {
      */
     public void setAuthorized(SecurityIdentity securityIdentity) {
         authorized = securityIdentity != null;
+        IdentityCache cache = createDomainCache();
         if (authorized) {
-            IdentityCache cache = createDomainCache();
-            if (this.principal != null) {
-                cache.remove();
-            }
             cache.put(securityIdentity);
         } else {
-            createDomainCache().remove();
+            cache.remove();
         }
     }
 

@@ -89,6 +89,15 @@ public class DefaultSingleSignOnSession implements SingleSignOnSession {
 
     @Override
     public void put(SecurityIdentity identity) {
+        // If the new identity is a different name invalidate the current cached identity.
+        CachedIdentity cached = get();
+        if (cached != null && !cached.getName().equals(identity.getPrincipal().getName())) {
+            SingleSignOn sso = this.map.remove(SINGLE_SIGN_ON_KEY);
+            if (sso != null) {
+                sso.invalidate();
+            }
+        }
+
         SingleSignOn sso = this.map.computeIfAbsent(SINGLE_SIGN_ON_KEY, key -> this.ssoFactory.apply(identity));
         sso.setIdentity(identity);
 
