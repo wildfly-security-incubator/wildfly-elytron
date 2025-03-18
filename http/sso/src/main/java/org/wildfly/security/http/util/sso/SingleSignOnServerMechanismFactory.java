@@ -171,8 +171,7 @@ public class SingleSignOnServerMechanismFactory implements HttpServerAuthenticat
                                 String id = singleSignOnSession.getId();
                                 if (id != null) {
                                     HttpServerCookie cookie = getCookie(request);
-
-                                    if (cookie == null) {
+                                    if (cookie == null || !id.equals(cookie.getValue())) {
                                         response.setResponseCookie(createCookie(id, -1));
                                     }
                                 }
@@ -194,7 +193,7 @@ public class SingleSignOnServerMechanismFactory implements HttpServerAuthenticat
                                 if (id != null) {
                                     HttpServerCookie cookie = getCookie(request);
 
-                                    if (cookie == null) {
+                                    if (cookie == null || !id.equals(cookie.getValue())) {
                                         response.setResponseCookie(createCookie(id, -1));
                                     }
                                 }
@@ -273,6 +272,7 @@ public class SingleSignOnServerMechanismFactory implements HttpServerAuthenticat
                         }
                         Principal principal = delegate.getAuthorizationPrincipal();
                         if (principal != null) {
+
                             callbacks[i] = new CachedIdentityAuthorizeCallback(principal, singleSignOnSession) {
                                 @Override
                                 public void setAuthorized(SecurityIdentity securityIdentity) {
