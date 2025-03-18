@@ -19,6 +19,7 @@
 package org.wildfly.security.http.oidc;
 
 import static org.wildfly.security.http.oidc.ElytronMessages.log;
+import static org.wildfly.security.http.oidc.IDToken.NONCE;
 import static org.wildfly.security.http.oidc.Oidc.ALLOW_QUERY_PARAMS_PROPERTY_NAME;
 import static org.wildfly.security.http.oidc.Oidc.CLIENT_ID;
 import static org.wildfly.security.http.oidc.Oidc.CODE;
@@ -33,6 +34,7 @@ import static org.wildfly.security.http.oidc.Oidc.PROMPT;
 import static org.wildfly.security.http.oidc.Oidc.REDIRECT_URI;
 import static org.wildfly.security.http.oidc.Oidc.RESPONSE_TYPE;
 import static org.wildfly.security.http.oidc.Oidc.SCOPE;
+import static org.wildfly.security.http.oidc.Oidc.SESSION_RANDOM_VALUE;
 import static org.wildfly.security.http.oidc.Oidc.SESSION_STATE;
 import static org.wildfly.security.http.oidc.Oidc.STATE;
 import static org.wildfly.security.http.oidc.Oidc.UI_LOCALES;
@@ -47,6 +49,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -56,6 +59,7 @@ import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.message.BasicNameValuePair;
+import org.wildfly.common.iteration.ByteIterator;
 import org.wildfly.security.http.HttpConstants;
 
 /**
@@ -75,7 +79,7 @@ public class OidcRequestAuthenticator {
     protected AuthChallenge challenge;
     protected String refreshToken;
     protected String strippedOauthParametersRequestUri;
-
+    private int NONCE_SIZE = 36;
     static final boolean ALLOW_QUERY_PARAMS_PROPERTY;
 
     static {
@@ -161,7 +165,7 @@ public class OidcRequestAuthenticator {
         return getQueryParamValue(facade, CODE);
     }
 
-    protected String getRedirectUri(String state) {
+    protected String getRedirectUri(String state, String sessionRandomValueHash) {
         String url = getRequestUrl();
         log.debugf("callback uri: %s", url);
 
@@ -199,7 +203,8 @@ public class OidcRequestAuthenticator {
                     .addParameter(RESPONSE_TYPE, CODE)
                     .addParameter(CLIENT_ID, deployment.getResourceName())
                     .addParameter(REDIRECT_URI, rewrittenRedirectUri(url))
-                    .addParameter(STATE, state);
+                    .addParameter(STATE, state)
+                    .addParameter(NONCE, sessionRandomValueHash);
             redirectUriBuilder.addParameters(forwardedQueryParams);
             return redirectUriBuilder.build().toString();
         } catch (URISyntaxException e) {
@@ -217,7 +222,8 @@ public class OidcRequestAuthenticator {
 
     protected AuthChallenge loginRedirect() {
         final String state = getStateCode();
-        final String redirect = getRedirectUri(state);
+        final String sessionRandomValue = generateSessionRandomValue();
+        final String redirect = getRedirectUri(state, Oidc.getCryptographicValue(sessionRandomValue));
         if (redirect == null) {
             return challenge(HttpStatus.SC_FORBIDDEN, AuthenticationError.Reason.NO_REDIRECT_URI, null);
         }
@@ -235,6 +241,7 @@ public class OidcRequestAuthenticator {
                 exchange.getResponse().setStatus(HttpStatus.SC_MOVED_TEMPORARILY);
                 exchange.getResponse().setCookie(deployment.getStateCookieName(), state, "/", null, -1, deployment.getSSLRequired().isRequired(facade.getRequest().getRemoteAddr()), true);
                 exchange.getResponse().setHeader(HttpConstants.LOCATION, redirect);
+                exchange.getResponse().setCookie(SESSION_RANDOM_VALUE, sessionRandomValue, "/", null, -1, deployment.getSSLRequired().isRequired(facade.getRequest().getRemoteAddr()), true);
                 return true;
             }
         };
@@ -362,7 +369,8 @@ public class OidcRequestAuthenticator {
 
         try {
             TokenValidator tokenValidator = TokenValidator.builder(deployment).build();
-            TokenValidator.VerifiedTokens verifiedTokens = tokenValidator.parseAndVerifyToken(idTokenString, tokenString);
+            TokenValidator.VerifiedTokens verifiedTokens = tokenValidator.parseAndVerifyToken(idTokenString, tokenString,
+                                        facade.getRequest().getCookie(SESSION_RANDOM_VALUE));
             idToken = verifiedTokens.getIdToken();
             token = verifiedTokens.getAccessToken();
             log.debug("Token Verification succeeded!");
@@ -434,5 +442,12 @@ public class OidcRequestAuthenticator {
             }
         }
         return false;
+    }
+
+    private String generateSessionRandomValue() {
+        SecureRandom random = new SecureRandom();
+        byte[] nonceData = new byte[NONCE_SIZE];
+        random.nextBytes(nonceData);
+        return ByteIterator.ofBytes(nonceData).base64Encode().drainToString();
     }
 }

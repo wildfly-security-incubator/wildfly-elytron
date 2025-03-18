@@ -238,5 +238,13 @@ interface ElytronMessages extends BasicLogger {
     @Message(id = 23057, value = "principal-attribute '%s' claim does not exist, falling back to 'sub'")
     void principalAttributeClaimDoesNotExist(String principalAttributeClaim);
 
+    @Message(id = 23071, value = "Invalid ID token nonce: %s")
+    String invalidNonceValue(String name);
+
+    @Message(id = 23072, value = "No such algorithm: '%s'")
+    IllegalArgumentException noSuchAlgorithm(String algorithm);
+
+    @Message(id = 23073, value = "Nonce cookie does not exist")
+    String nonceCookieDoesNotExist();
 }
 
