@@ -367,6 +367,34 @@ public class OidcTest extends OidcBaseTest {
         performTenantRequestWithProviderUrl(DAN, DAN_PASSWORD, TENANT2_ENDPOINT, TENANT1_ENDPOINT);
     }
 
+    /**
+     *  Check that a RefreshableOidcSecurityContext.tokenRefresh works now that
+     *  a request nonce has been added to elytron.
+     */
+    @Test
+    public void testRefreshToken() throws Exception {
+        Map<String, Object> props = new HashMap<>();
+        OidcClientConfiguration oidcClientConfiguration = OidcClientConfigurationBuilder.build(getOidcRefreshConfigurationInputStream());
+        OidcClientContext oidcClientContext = new OidcClientContext(oidcClientConfiguration);
+        oidcFactory = new OidcMechanismFactory(oidcClientContext);
+        HttpServerAuthenticationMechanism mechanism = oidcFactory.createAuthenticationMechanism(OIDC_NAME, props, getCallbackHandler());
+
+        URI requestUri = new URI(getClientUrl());
+        TestingHttpServerRequest request = new TestingHttpServerRequest(null, requestUri);
+        mechanism.evaluateRequest(request);
+        TestingHttpServerResponse response = request.getResponse();
+        assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, response.getStatusCode());
+        assertEquals(Status.NO_AUTH, request.getResult());
+
+        client.setDispatcher(createAppResponse(mechanism, HttpStatus.SC_MOVED_TEMPORARILY,
+                getClientUrl(), CLIENT_PAGE_TEXT, true));
+
+        TextPage page = loginToKeycloak(KeycloakConfiguration.ALICE,
+                KeycloakConfiguration.ALICE_PASSWORD, requestUri, response.getLocation(),
+                response.getCookies()).click();
+        assertTrue(page.getContent().contains(CLIENT_PAGE_TEXT));
+    }
+
     private void testNonExistingUserWithAuthServerUrl(String username, String password, String tenant) throws Exception {
         testNonExistingUser(username, password, tenant, true);
     }
@@ -593,5 +621,21 @@ public class OidcTest extends OidcBaseTest {
 
     private static final String getClientPageTestForTenant(String tenant) {
         return tenant.equals(TENANT1_ENDPOINT) ? TENANT1_ENDPOINT : TENANT2_ENDPOINT + ":" + CLIENT_PAGE_TEXT;
+    }
+
+    private InputStream getOidcRefreshConfigurationInputStream() {
+        return getOidcRefreshConfigurationInputStream(CLIENT_SECRET, KEYCLOAK_CONTAINER.getAuthServerUrl());
+    }
+    private InputStream getOidcRefreshConfigurationInputStream(String clientSecret, String authServerUrl) {
+        String oidcConfig = "{\n" +
+                "    \"client-id\" : \"" + CLIENT_ID + "\",\n" +
+                "    \"public-client\" : \"false\",\n" +
+                "    \"provider-url\" : \"" + KEYCLOAK_CONTAINER.getAuthServerUrl() + "/realms/" + TEST_REALM + "\",\n" +
+                "    \"ssl-required\" : \"EXTERNAL\",\n" +
+                "     \"credentials\" : {\n" +
+                "        \"secret\" : \"" + CLIENT_SECRET + "\"\n" +
+                "    }\n" +
+                "}";
+        return new ByteArrayInputStream(oidcConfig.getBytes(StandardCharsets.UTF_8));
     }
 }
