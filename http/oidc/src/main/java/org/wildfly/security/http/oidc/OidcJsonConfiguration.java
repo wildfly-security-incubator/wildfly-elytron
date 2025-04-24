@@ -40,6 +40,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "enable-cors", "cors-max-age", "cors-allowed-methods", "cors-exposed-headers",
         "expose-token", "bearer-only", "autodetect-bearer-only",
         "connection-pool-size",
+        "connection-timeout-millis", "connection-ttl-millis", "socket-timeout-millis",
         "allow-any-hostname", "disable-trust-manager", "truststore", "truststore-password",
         "client-keystore", "client-keystore-password", "client-key-password",
         "always-refresh-token",
@@ -66,6 +67,12 @@ public class OidcJsonConfiguration {
     protected String clientKeyPassword;
     @JsonProperty("connection-pool-size")
     protected int connectionPoolSize = 20;
+    @JsonProperty("connection-timeout-millis")
+    protected int connectionTimeoutMillis = -1;
+    @JsonProperty("connection-ttl-millis")
+    protected int connectionTtlMillis = -1;
+    @JsonProperty("socket-timeout-millis")
+    protected int socketTimeoutMillis = -1;
     @JsonProperty("always-refresh-token")
     protected boolean alwaysRefreshToken = false;
     @JsonProperty("register-node-at-startup")
@@ -208,6 +215,30 @@ public class OidcJsonConfiguration {
 
     public void setConnectionPoolSize(int connectionPoolSize) {
         this.connectionPoolSize = connectionPoolSize;
+    }
+
+    public int getConnectionTimeoutMillis() {
+        return connectionTimeoutMillis;
+    }
+
+    public void setConnectionTimeoutMillis(int connectionTimeoutMillis) {
+        this.connectionTimeoutMillis = connectionTimeoutMillis;
+    }
+
+    public int getConnectionTtlMillis() {
+        return connectionTtlMillis;
+    }
+
+    public void setConnectionTtlMillis(int connectionTtlMillis) {
+        this.connectionTtlMillis = connectionTtlMillis;
+    }
+
+    public int getSocketTimeoutMillis() {
+        return socketTimeoutMillis;
+    }
+
+    public void setSocketTimeoutMillis(int socketTimeoutMillis) {
+        this.socketTimeoutMillis = socketTimeoutMillis;
     }
 
     public boolean isAlwaysRefreshToken() {
