@@ -370,7 +370,7 @@ public class OidcRequestAuthenticator {
         try {
             TokenValidator tokenValidator = TokenValidator.builder(deployment).build();
             TokenValidator.VerifiedTokens verifiedTokens = tokenValidator.parseAndVerifyToken(idTokenString, tokenString,
-                                        facade.getRequest().getCookie(SESSION_RANDOM_VALUE));
+                    facade.getRequest().getCookie(SESSION_RANDOM_VALUE), true);
             idToken = verifiedTokens.getIdToken();
             token = verifiedTokens.getAccessToken();
             log.debug("Token Verification succeeded!");
