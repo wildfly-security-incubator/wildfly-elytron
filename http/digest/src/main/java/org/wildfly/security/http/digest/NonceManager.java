@@ -15,178 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.wildfly.security.http.digest;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.Serializable;
-import java.nio.ByteBuffer;
-import java.security.DigestException;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.wildfly.common.iteration.ByteIterator;
-import org.wildfly.common.iteration.CodePointIterator;
 import org.wildfly.security.http.HttpServerRequest;
-import org.wildfly.security.mechanism._private.ElytronMessages;
 import org.wildfly.security.mechanism.AuthenticationMechanismException;
 
+import java.io.Serializable;
+
 /**
- * A utility responsible for managing nonces.
- *
- * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>
+ * Interface for utilities responsible for managing nonces
  */
-class NonceManager implements  Serializable {
-
-    public static final int DEFAULT_VALIDITY_PERIOD = 300000;
-    public static final int DEFAULT_NONCE_SESSION_TIME = 900000;
-    public static final int DEFAULT_KEY_SIZE = 20;
-
-    private static final int PREFIX_LENGTH = Integer.BYTES + Long.BYTES;
-
-    private transient ScheduledExecutorService executor;
-    private final AtomicInteger nonceCounter = new AtomicInteger();
-    private final Map<String, NonceState> usedNonces = new HashMap<>();
-
-    private final byte[] privateKey;
-
-    private final long validityPeriodNano;
-    private final long nonceSessionTime;
-    private final boolean singleUse;
-    private final String algorithm;
-    private ElytronMessages log;
-    private transient HttpServerRequest request;
-    private final boolean persistToSession;
-
-    /**
-     * @param validityPeriod the time in ms that nonces are valid for in ms.
-     * @param nonceSessionTime the time in ms a nonce is usable for after it's last use where nonce counts are in use.
-     * @param singleUse are nonces single use?
-     * @param keySize the number of bytes to use in the private key of this node.
-     * @param algorithm the message digest algorithm to use when creating the digest portion of the nonce.
-     */
-
-    @Deprecated
-    NonceManager(long validityPeriod, long nonceSessionTime, boolean singleUse, int keySize, String algorithm) {
-        this.validityPeriodNano = validityPeriod * 1000000;
-        this.nonceSessionTime = nonceSessionTime;
-        this.singleUse = singleUse;
-        this.algorithm = algorithm;
-        this.log = ElytronMessages.log;
-
-        this.privateKey = new byte[keySize];
-        new SecureRandom().nextBytes(privateKey);
-        ScheduledThreadPoolExecutor INSTANCE = new ScheduledThreadPoolExecutor(1);
-        INSTANCE.setRemoveOnCancelPolicy(true);
-        INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-        executor = INSTANCE;
-        persistToSession = false;
-    }
-
-    /**
-     * @param validityPeriod the time in ms that nonces are valid for in ms.
-     * @param nonceSessionTime the time in ms a nonce is usable for after it's last use where nonce counts are in use.
-     * @param singleUse are nonces single use?
-     * @param keySize the number of bytes to use in the private key of this node.
-     * @param algorithm the message digest algorithm to use when creating the digest portion of the nonce.
-     * @param log mechanism specific logger.
-     */
-    NonceManager(long validityPeriod, long nonceSessionTime, boolean singleUse, int keySize, String algorithm, ElytronMessages log) {
-        this.validityPeriodNano = validityPeriod * 1000000;
-        this.nonceSessionTime = nonceSessionTime;
-        this.singleUse = singleUse;
-        this.algorithm = algorithm;
-        this.log = log;
-
-        this.privateKey = new byte[keySize];
-        new SecureRandom().nextBytes(privateKey);
-        ScheduledThreadPoolExecutor INSTANCE = new ScheduledThreadPoolExecutor(1);
-        INSTANCE.setRemoveOnCancelPolicy(true);
-        INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-        executor = INSTANCE;
-        persistToSession = false;
-    }
-
-    /**
-     * @param validityPeriod the time in ms that nonces are valid for in ms.
-     * @param nonceSessionTime the time in ms a nonce is usable for after it's last use where nonce counts are in use.
-     * @param singleUse are nonces single use?
-     * @param keySize the number of bytes to use in the private key of this node.
-     * @param algorithm the message digest algorithm to use when creating the digest portion of the nonce.
-     * @param log mechanism specific logger.
-     * @param customExecutor a custom ScheduledExecutorService to be used
-     */
-    NonceManager(long validityPeriod, long nonceSessionTime, boolean singleUse, int keySize, String algorithm, ElytronMessages log, ScheduledExecutorService customExecutor) {
-        this.validityPeriodNano = validityPeriod * 1000000;
-        this.nonceSessionTime = nonceSessionTime;
-        this.singleUse = singleUse;
-        this.algorithm = algorithm;
-        this.log = log;
-
-        this.privateKey = new byte[keySize];
-        new SecureRandom().nextBytes(privateKey);
-        if (customExecutor == null) {
-            ScheduledThreadPoolExecutor INSTANCE = new ScheduledThreadPoolExecutor(1);
-            INSTANCE.setRemoveOnCancelPolicy(true);
-            INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-            executor = INSTANCE;
-        }
-        else {
-            executor = customExecutor;
-        }
-        persistToSession = false;
-    }
-
-    /**
-     * @param validityPeriod the time in ms that nonces are valid for in ms.
-     * @param nonceSessionTime the time in ms a nonce is usable for after it's last use where nonce counts are in use.
-     * @param singleUse are nonces single use?
-     * @param keySize the number of bytes to use in the private key of this node.
-     * @param algorithm the message digest algorithm to use when creating the digest portion of the nonce.
-     * @param log mechanism specific logger.
-     * @param customExecutor a custom ScheduledExecutorService to be used
-     * @param persistToSession should the nonce manager instance be persisted in HTTP Session so it is shared between nodes in a cluster
-     */
-    NonceManager(long validityPeriod, long nonceSessionTime, boolean singleUse, int keySize, String algorithm, ElytronMessages log, ScheduledExecutorService customExecutor, boolean persistToSession) {
-        this.validityPeriodNano = validityPeriod * 1000000;
-        this.nonceSessionTime = nonceSessionTime;
-        this.singleUse = singleUse;
-        this.algorithm = algorithm;
-        this.log = log;
-
-        this.privateKey = new byte[keySize];
-        new SecureRandom().nextBytes(privateKey);
-        if (customExecutor == null) {
-            ScheduledThreadPoolExecutor INSTANCE = new ScheduledThreadPoolExecutor(1);
-            INSTANCE.setRemoveOnCancelPolicy(true);
-            INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-            executor = INSTANCE;
-        }
-        else {
-            executor = customExecutor;
-        }
-        this.persistToSession = persistToSession;
-    }
-
-    /**
-     * Generate a new encoded nonce to send to the client.
-     *
-     * @return a new encoded nonce to send to the client.
-     */
-    String generateNonce() {
-        return generateNonce(null);
-    }
+public interface NonceManager extends Serializable {
 
     /**
      * Generate a new encoded nonce to send to the client.
@@ -194,54 +33,7 @@ class NonceManager implements  Serializable {
      * @param salt additional data to use when creating the overall signature for the nonce.
      * @return a new encoded nonce to send to the client.
      */
-    String generateNonce(byte[] salt) {
-        try {
-            MessageDigest messageDigest = MessageDigest.getInstance(algorithm);
-
-            ByteBuffer byteBuffer = ByteBuffer.allocate(PREFIX_LENGTH + messageDigest.getDigestLength());
-            byteBuffer.putInt(nonceCounter.incrementAndGet());
-            byteBuffer.putLong(System.nanoTime());
-            byteBuffer.put(digest(byteBuffer.array(), 0, PREFIX_LENGTH, salt, messageDigest));
-
-            String nonce = ByteIterator.ofBytes(byteBuffer.array()).base64Encode().drainToString();
-            if (log.isTraceEnabled()) {
-                String saltString = salt == null ? "null" : ByteIterator.ofBytes(salt).hexEncode().drainToString();
-                log.tracef("New nonce generated %s, using seed %s", nonce, saltString);
-            }
-            return nonce;
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private byte[] digest(byte[] prefix, int prefixOffset, int prefixLength, byte[] salt, MessageDigest messageDigest) throws DigestException {
-        messageDigest.update(prefix, prefixOffset, prefixLength);
-        if (salt != null) {
-            messageDigest.update(salt);
-        }
-
-        return messageDigest.digest(privateKey);
-    }
-
-    /**
-     * Attempt to use the supplied nonce.
-     *
-     * A nonce might not be usable for a couple of different reasons: -
-     *
-     * <ul>
-     *     <li>It was created too far in the past.
-     *     <li>Validation of the signature fails.
-     *     <li>The nonce has been used previously and re-use is disabled.
-     * </ul>
-     *
-     * @param nonce the nonce supplied by the client.
-     * @param nonceCount the nonce count, or -1 if not present
-     * @return {@code true} if the nonce can be used, {@code false} otherwise.
-     * @throws AuthenticationMechanismException
-     */
-    boolean useNonce(String nonce, int nonceCount) throws AuthenticationMechanismException {
-        return useNonce(nonce, null, nonceCount);
-    }
+    String generateNonce(byte[] salt);
 
     /**
      * Attempt to use the supplied nonce.
@@ -259,131 +51,26 @@ class NonceManager implements  Serializable {
      * @return {@code true} if the nonce can be used, {@code false} otherwise.
      * @throws AuthenticationMechanismException
      */
-    boolean useNonce(final String nonce, byte[] salt, int nonceCount) throws AuthenticationMechanismException {
-        try {
-            MessageDigest messageDigest = MessageDigest.getInstance(algorithm);
-            ByteIterator byteIterator = CodePointIterator.ofChars(nonce.toCharArray()).base64Decode();
-            byte[] nonceBytes = byteIterator.drain();
-            if (nonceBytes.length != PREFIX_LENGTH + messageDigest.getDigestLength()) {
-                throw log.invalidNonceLength();
-            }
+    boolean useNonce(String nonce, byte[] salt, int nonceCount) throws AuthenticationMechanismException;
 
-            byte[] nonceBytesWithoutPrefix = Arrays.copyOfRange(nonceBytes, PREFIX_LENGTH, nonceBytes.length);
-            byte[] expectedNonce = digest(nonceBytes, 0, PREFIX_LENGTH, salt, messageDigest);
-            if (MessageDigest.isEqual(nonceBytesWithoutPrefix, expectedNonce) == false) {
-                if (log.isTraceEnabled()) {
-                    String saltString = salt == null ? "null" : ByteIterator.ofBytes(salt).hexEncode().drainToString();
-                    log.tracef("Nonce %s rejected due to failed comparison using secret key with seed %s.", nonce,
-                            saltString);
-                }
-                return false;
-            }
+    /**
+     * Clean up and shut down the NonceManager
+     */
+    void shutdown();
 
-            long age = System.nanoTime() - ByteBuffer.wrap(nonceBytes, Integer.BYTES, Long.BYTES).getLong();
-            if(nonceCount > 0) {
-                synchronized (usedNonces) {
-                    NonceState nonceState = usedNonces.get(nonce);
-                    if (nonceState != null && nonceState.highestNonceCount < 0) {
-                        log.tracef("Nonce %s rejected due to previously being used without a nonce count", nonce);
-                        return false;
-                    } else if (nonceState != null) {
-                        if (nonceCount > nonceState.highestNonceCount) {
-                            if (nonceState.futureCleanup.cancel(true)) {
-                                nonceState.highestNonceCount = nonceCount;
-                            } else {
-                                log.tracef("Nonce %s rejected as unable to cancel clean up, likely at expiration time", nonce);
-                                return false;
-                            }
-                        } else {
-                            log.tracef("Nonce %s rejected due to highest seen nonce count %d being equal to or higher than the nonce count received %d",
-                                    nonce, nonceState.highestNonceCount, nonceCount);
-                            return false;
-                        }
-                    } else {
-                        if (age < 0 || age > validityPeriodNano) {
-                            log.tracef("Nonce %s rejected due to age %d (ns) being less than 0 or greater than the validity period %d (ns)",
-                                    nonce, age, validityPeriodNano);
-                            return false;
-                        }
-                        nonceState = new NonceState();
-                        nonceState.highestNonceCount = nonceCount;
-                        usedNonces.put(nonce, nonceState);
-                        if (log.isTraceEnabled()) {
-                            log.tracef("Currently %d nonces being tracked", usedNonces.size());
-                        }
-                    }
+    /**
+     * Set the HTTP server request that is currently being evaluated
+     * @param request
+     */
+    void setRequest(HttpServerRequest request);
 
-                    nonceState.futureCleanup = executor.schedule(() -> {
-                        synchronized (usedNonces) {
-                            usedNonces.remove(nonce);
-                        }
-                    }, nonceSessionTime, TimeUnit.MILLISECONDS);
-                }
-            } else {
-                if (age < 0 || age > validityPeriodNano) {
-                    log.tracef("Nonce %s rejected due to age %d (ns) being less than 0 or greater than the validity period %d (ns)", nonce, age, validityPeriodNano);
-                    return false;
-                }
+    /**
+     * @return HTTP server request that is currently being evaluated by the nonce manager
+     */
+    HttpServerRequest getRequest();
 
-                if (singleUse) {
-                    synchronized(usedNonces) {
-                        NonceState nonceState = usedNonces.get(nonce);
-                        if (nonceState != null) {
-                            log.tracef("Nonce %s rejected due to previously being used", nonce);
-                            return false;
-                        } else {
-                            nonceState = new NonceState();
-                            usedNonces.put(nonce, nonceState);
-                            if (log.isTraceEnabled()) {
-                                log.tracef("Currently %d nonces being tracked", usedNonces.size());
-                            }
-                            executor.schedule(() -> {
-                                synchronized(usedNonces) {
-                                    usedNonces.remove(nonce);
-                                }
-                            }, validityPeriodNano - age, TimeUnit.NANOSECONDS);
-                        }
-                    }
-                }
-            }
-
-            return true;
-
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    public boolean persistToSession() {
-        return persistToSession;
-    }
-
-    public void setRequest(HttpServerRequest request) {
-        this.request = request;
-    }
-
-    public HttpServerRequest getRequest() {
-        return this.request;
-    }
-
-    public void shutdown() {
-        if (executor != null) { executor.shutdown(); }
-    }
-
-    void setDefaultExecutor() {
-        ScheduledThreadPoolExecutor INSTANCE = new ScheduledThreadPoolExecutor(1);
-        INSTANCE.setRemoveOnCancelPolicy(true);
-        INSTANCE.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-        this.executor = INSTANCE;
-    }
-
-    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-        in.defaultReadObject();
-        setDefaultExecutor();
-    }
-
-    static class NonceState implements Serializable {
-        private transient ScheduledFuture<?> futureCleanup;
-        private int highestNonceCount = -1;
-    }
+    /**
+     * @return whether this nonce manager is being persisted in a session
+     */
+    boolean persistToSession();
 }

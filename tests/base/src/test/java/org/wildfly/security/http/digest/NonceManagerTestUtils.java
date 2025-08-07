@@ -26,7 +26,7 @@ import mockit.MockUp;
  */
 public class NonceManagerTestUtils {
     public static void mockDigestNonce(final String nonce) {
-        new MockUp<NonceManager>() {
+        new MockUp<DefaultNonceManager>() {
             @Mock
             String generateNonce(byte[] salt) {
                 return nonce;
