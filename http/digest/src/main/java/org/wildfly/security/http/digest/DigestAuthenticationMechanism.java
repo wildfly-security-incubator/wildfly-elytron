@@ -121,10 +121,12 @@ final class DigestAuthenticationMechanism implements HttpServerAuthenticationMec
 
         if (nonceManager.persistToSession()) {
             if (request.getScope(Scope.SESSION) == null || !request.getScope(Scope.SESSION).exists()) {
+                httpDigest.trace("Creating HTTP session.");
                 request.getScope(Scope.SESSION).create();
             }
             NonceManager nonceManagerFromSession = (NonceManager) request.getScope(Scope.SESSION).getAttachment(NONCE_MANAGER);
             if (nonceManagerFromSession != null) {
+                httpDigest.trace("Setting nonce manager obtained from HTTP session.");
                 nonceManager = nonceManagerFromSession;
             }
         }

@@ -176,6 +176,9 @@ class DefaultNonceManager implements  NonceManager, Serializable {
         else {
             executor = customExecutor;
         }
+        if (persistToSession) {
+            log.tracef("Digest authentication mechanism is configured to persist nonce manager details to HTTP session.");
+        }
         this.persistToSession = persistToSession;
     }
 
